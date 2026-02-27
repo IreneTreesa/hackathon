@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Ernakulam Safety Navigator</title>
+<meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no">
+
+<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet"/>
+
+<style>
+body { margin:0; padding:0; font-family:'Segoe UI',sans-serif; }
+#map { position:absolute; top:0; bottom:0; width:100%; height:100vh; }
+
+#nav-panel {
+position:absolute;
+top:10px;
+left:10px;
+z-index:10;
+background:white;
+padding:15px;
+border-radius:8px;
+width:300px;
+box-shadow:0 2px 10px rgba(0,0,0,0.3);
+}
+
+input,select {
+width:92%;
+padding:10px;
+margin-bottom:10px;
+border:1px solid #ccc;
+border-radius:4px;
+}
+
+.route-btn {
+background:#4285F4;
+color:white;
+border:none;
+padding:12px;
+width:100%;
+border-radius:4px;
+font-weight:bold;
+cursor:pointer;
+}
+
+.submit-btn {
+background:#ff4444;
+color:white;
+border:none;
+padding:8px;
+border-radius:4px;
+cursor:pointer;
+width:100%;
+margin-top:5px;
+}
+</style>
+</head>
+
+<body>
+
+<div id="nav-panel">
+
+<h3>Safety Navigator</h3>
+
+<input id="start-loc" placeholder="Detecting GPS..." disabled>
+
+<input id="end-loc" placeholder="Type place or click map">
+
+<button class="route-btn" onclick="getRoute()">Start Navigation</button>
+
+<div style="border-top:1px solid #eee;margin-top:15px;padding-top:10px">
+
+<p style="font-size:12px">Report Area Lighting:</p>
+
+<select id="lighting-score">
+<option value="5">5 - Bright</option>
+<option value="1">1 - Dark</option>
+</select>
+
+<button class="submit-btn" onclick="submitRating()">
+Submit to Firebase
+</button>
+
+</div>
+</div>
+
+<div id="map"></div>
+
+<script>
+
+// ================= MAP INIT =================
+
+const map = new maplibregl.Map({
+container:'map',
+style:'https://tiles.openfreemap.org/styles/liberty',
+center:[76.2999,9.9816],
+zoom:13,
+pitch:45
+});
+
+// ================= VARIABLES =================
+
+let userLocation = null;
+let destinationMarker = null;
+let navMarker = null;
+let navigationActive = false;
+
+
+// ================= GPS =================
+
+const geoControl = new maplibregl.GeolocateControl({
+positionOptions:{ enableHighAccuracy:true },
+trackUserLocation:true,
+showUserHeading:true,
+showAccuracyCircle:true
+});
+
+map.addControl(geoControl);
+
+map.on('load',()=>{
+geoControl.trigger();
+});
+
+
+geoControl.on('geolocate',(e)=>{
+
+userLocation = [e.coords.longitude, e.coords.latitude];
+
+document.getElementById('start-loc').value =
+e.coords.latitude.toFixed(5)+", "+e.coords.longitude.toFixed(5);
+
+
+// MOVE marker only when navigation active
+if(navigationActive && navMarker){
+
+navMarker.setLngLat(userLocation);
+
+map.easeTo({
+center:userLocation,
+zoom:17,
+pitch:60,
+duration:500
+});
+
+}
+
+});
+
+
+// ================= CLICK DESTINATION =================
+
+map.on('click',(e)=>{
+
+setDestination(e.lngLat.lng, e.lngLat.lat);
+
+});
+
+
+// ================= SEARCH DESTINATION =================
+
+document.getElementById("end-loc")
+.addEventListener("keypress", async function(e){
+
+if(e.key !== "Enter") return;
+
+const query = this.value;
+
+if(query.length < 3) return;
+
+try{
+
+const url =
+`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=1`;
+
+const res = await fetch(url);
+
+const data = await res.json();
+
+if(data.length === 0){
+alert("Place not found");
+return;
+}
+
+const place = data[0];
+
+const lng = parseFloat(place.lon);
+const lat = parseFloat(place.lat);
+
+setDestination(lng, lat, place.display_name);
+
+map.flyTo({
+center:[lng,lat],
+zoom:16
+});
+
+}
+catch{
+
+alert("Search failed");
+
+}
+
+});
+
+
+// ================= SET DESTINATION =================
+
+function setDestination(lng, lat, name=null){
+
+if(destinationMarker)
+destinationMarker.remove();
+
+destinationMarker = new maplibregl.Marker({
+color:"#4285F4"
+})
+.setLngLat([lng,lat])
+.addTo(map);
+
+document.getElementById("end-loc").value =
+name ? name : lat.toFixed(5)+", "+lng.toFixed(5);
+
+
+// SHOW ROUTE IMMEDIATELY (LIKE GOOGLE MAPS)
+if(userLocation){
+
+previewRoute(lng, lat);
+
+}
+
+}
+
+// ================= ROUTE =================
+
+async function getRoute(){
+
+if(!userLocation){
+alert("Waiting for GPS");
+return;
+}
+
+if(!destinationMarker){
+alert("Select destination");
+return;
+}
+
+const dest = destinationMarker.getLngLat();
+
+const url =
+`https://router.project-osrm.org/route/v1/driving/`+
+`${userLocation[0]},${userLocation[1]};${dest.lng},${dest.lat}`+
+`?overview=full&geometries=geojson`;
+
+try{
+
+const res = await fetch(url);
+
+const data = await res.json();
+
+if(!data.routes || data.routes.length===0){
+alert("No route found");
+return;
+}
+
+const coords = data.routes[0].geometry.coordinates;
+
+drawRoute(coords);
+
+startNavigation();
+
+}
+catch{
+
+alert("Routing failed");
+
+}
+
+}
+
+async function previewRoute(destLng, destLat){
+
+if(!userLocation) return;
+
+const url =
+`https://router.project-osrm.org/route/v1/driving/`+
+`${userLocation[0]},${userLocation[1]};${destLng},${destLat}`+
+`?overview=full&geometries=geojson`;
+
+try{
+
+const res = await fetch(url);
+
+const data = await res.json();
+
+if(!data.routes || data.routes.length===0) return;
+
+const coords = data.routes[0].geometry.coordinates;
+
+drawRoute(coords);
+
+}
+catch{}
+
+}
+
+// ================= DRAW ROUTE =================
+
+function drawRoute(coords){
+
+if(map.getSource("route")){
+
+map.removeLayer("route");
+
+map.removeSource("route");
+
+}
+
+map.addSource("route",{
+type:"geojson",
+data:{
+type:"Feature",
+geometry:{
+type:"LineString",
+coordinates:coords
+}
+}
+});
+
+map.addLayer({
+
+id:"route",
+
+type:"line",
+
+source:"route",
+
+paint:{
+"line-color":"#4285F4",
+"line-width":6
+}
+
+});
+
+}
+
+
+// ================= START NAVIGATION =================
+
+function startNavigation(){
+
+navigationActive = true;
+
+if(navMarker)
+navMarker.remove();
+
+navMarker = new maplibregl.Marker({
+color:"#ff0000"
+})
+.setLngLat(userLocation)
+.addTo(map);
+
+}
+
+</script>
+
+
+<script type="module">
+
+import { initializeApp }
+from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+
+import { getFirestore, collection, addDoc }
+from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+const firebaseConfig={
+apiKey:"AIzaSyAinwvKoSUQS9d7O23oC1FA6m3uLL1ryZE",
+authDomain:"maps-9f8e9.firebaseapp.com",
+projectId:"maps-9f8e9",
+storageBucket:"maps-9f8e9.firebasestorage.app",
+messagingSenderId:"152379968772",
+appId:"1:152379968772:web:25b219c0f80d878a459451"
+};
+
+const app=initializeApp(firebaseConfig);
+
+const db=getFirestore(app);
+
+
+window.submitRating = async()=>{
+
+const score=document.getElementById('lighting-score').value;
+
+const center=map.getCenter();
+
+await addDoc(collection(db,"reports"),{
+
+lat:center.lat,
+
+lng:center.lng,
+
+rating:parseInt(score),
+
+time:new Date()
+
+});
+
+alert("Saved");
+
+};
+
+</script>
+
+</body>
+</html>
