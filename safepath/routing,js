@@ -1,0 +1,79 @@
+async function getRoute(){
+
+if(!userLocation){
+alert("Waiting for GPS");
+return;
+}
+
+if(!destinationMarker){
+alert("Select destination");
+return;
+}
+
+const dest = destinationMarker.getLngLat();
+
+const url =
+`https://router.project-osrm.org/route/v1/driving/`+
+`${userLocation[0]},${userLocation[1]};${dest.lng},${dest.lat}`+
+`?overview=full&geometries=geojson`;
+
+const res = await fetch(url);
+const data = await res.json();
+
+const coords = data.routes[0].geometry.coordinates;
+
+drawRoute(coords);
+
+startNavigation();
+}
+
+function drawRoute(coords){
+
+if(map.getSource("route")){
+map.removeLayer("route");
+map.removeSource("route");
+}
+
+map.addSource("route",{
+type:"geojson",
+data:{
+type:"Feature",
+geometry:{
+type:"LineString",
+coordinates:coords
+}
+}
+});
+
+map.addLayer({
+id:"route",
+type:"line",
+source:"route",
+paint:{
+"line-color":"#4285F4",
+"line-width":6
+}
+});
+}
+
+async function previewRoute(destLng, destLat){
+
+if(!userLocation) return;
+
+const url =
+`https://router.project-osrm.org/route/v1/driving/`+
+`${userLocation[0]},${userLocation[1]};${destLng},${destLat}`+
+`?overview=full&geometries=geojson`;
+
+const res = await fetch(url);
+const data = await res.json();
+
+if(!data.routes || data.routes.length===0) return;
+
+drawRoute(data.routes[0].geometry.coordinates);
+drawRoute(coords);
+
+// optional: enable navigation button visually
+console.log("Route preview ready");
+
+}
