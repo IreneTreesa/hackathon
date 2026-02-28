@@ -84,11 +84,11 @@ const firebaseConfig = {
 };
 
 🔌 **API Reference**
-OSRM Routing- https://router.project-osrm.org/route/v1/driving/ -Get driving route between two coordinates
-Nominatim- https://nominatim.openstreetmap.org/search -Search place by name
-OpenFreeMap- https://tiles.openfreemap.org/styles/liberty Map tile style
-Firebase Firestore- db.collection("reports") -Read/write safety reports
-Firebase Firestore- db.collection("sos_alerts") -Write SOS emergency alerts
+1. OSRM Routing- https://router.project-osrm.org/route/v1/driving/ -Get driving route between two coordinates
+2. Nominatim- https://nominatim.openstreetmap.org/search -Search place by name
+3. OpenFreeMap- https://tiles.openfreemap.org/styles/liberty Map tile style
+4. Firebase Firestore- db.collection("reports") -Read/write safety reports
+5. Firebase Firestore- db.collection("sos_alerts") -Write SOS emergency alerts
 
 👥 **Team Members**
 Team Name: TeamGI
