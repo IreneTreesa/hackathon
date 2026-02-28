@@ -10,13 +10,13 @@ https://drive.google.com/drive/folders/1sReyzdPKWOEtcbpmOvjWXccDb6xghL_9?usp=sha
 
 
 🧰 **Tech Stack**
-Frontend- HTML5, CSS3, Vanilla JavaScript
-Maps- MapLibre GL JS v4.7.1
-Routing- OSRM (Open Source Routing Machine)
-Geocoding- Nominatim (OpenStreetMap)
-Map Tiles- OpenFreeMap (Liberty style)
-Database- Firebase Firestore
-Hosting- Firebase / GitHub Pages
+1. Frontend- HTML5, CSS3, Vanilla JavaScript
+2. Maps- MapLibre GL JS v4.7.1
+3. Routing- OSRM (Open Source Routing Machine)
+4. Geocoding- Nominatim (OpenStreetMap)
+5. Map Tiles- OpenFreeMap (Liberty style)
+6. Database- Firebase Firestore
+7. Hosting- Firebase / GitHub Pages
 
 ✨ **Features**
 
